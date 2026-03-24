@@ -5,7 +5,7 @@ nixPkgs = ["nodejs_20", "npm-9_x", "openssl"]
 cmds = ["npm ci"]
 
 [phases.build]
-cmds = ["npx prisma generate", "npm run build", "cp -r .next/static .next/standalone/.next/static", "cp -r public .next/standalone/public || true"]
+cmds = ["npx prisma generate", "DATABASE_URL='postgresql://placeholder:placeholder@localhost:5432/placeholder' npm run build", "cp -r .next/static .next/standalone/.next/static", "cp -r public .next/standalone/public || true"]
 
 [start]
-cmd = "sh -c 'npx prisma migrate deploy; HOSTNAME=0.0.0.0 node .next/standalone/server.js'"
+cmd = "sh -c 'npx prisma db push --skip-generate && npx tsx prisma/seed.ts; HOSTNAME=0.0.0.0 node .next/standalone/server.js'"

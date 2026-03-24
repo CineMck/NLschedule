@@ -8,4 +8,4 @@ cmds = ["npm ci"]
 cmds = ["npx prisma generate", "npm run build"]
 
 [start]
-cmd = "(npx prisma migrate deploy || echo 'Migration skipped') && HOSTNAME=0.0.0.0 node .next/standalone/server.js"
+cmd = "sh -c 'npx prisma migrate deploy; HOSTNAME=0.0.0.0 node .next/standalone/server.js'"

@@ -1,0 +1,269 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  MANAGER
+  EMPLOYEE
+}
+
+enum PayType {
+  HOURLY
+  SALARY
+}
+
+enum TimeOffStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum SwapStatus {
+  PENDING
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum DayOfWeek {
+  SUNDAY
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+}
+
+enum NotificationType {
+  SCHEDULE_CHANGE
+  TIME_OFF_DECISION
+  SWAP_UPDATE
+  INVITE
+  SHIFT_REMINDER
+  DELEGATION_CHANGE
+}
+
+enum DelegatedPermission {
+  APPROVE_TIME_OFF
+  INVITE_EMPLOYEES
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  timezone    String   @default("America/New_York")
+  weekStartsOn Int    @default(0) // 0=Sunday, 1=Monday
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users              User[]
+  invitations        Invitation[]
+  shifts             Shift[]
+  timeOffRequests    TimeOffRequest[]
+  clockEntries       ClockEntry[]
+  shiftSwapRequests  ShiftSwapRequest[]
+  notifications      Notification[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String
+  passwordHash   String
+  name           String
+  role           Role
+  payType        PayType?
+  hourlyRate     Decimal?  @db.Decimal(10, 2)
+  annualSalary   Decimal?  @db.Decimal(12, 2)
+  isActive       Boolean   @default(true)
+  organizationId String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization       Organization        @relation(fields: [organizationId], references: [id])
+  sentInvitations    Invitation[]        @relation("InvitedBy")
+  delegationsGranted ManagerDelegation[] @relation("GrantedBy")
+  delegationsReceived ManagerDelegation[] @relation("DelegatedManager")
+  createdShifts      Shift[]             @relation("ShiftCreatedBy")
+  assignedShifts     Shift[]             @relation("ShiftAssignedTo")
+  timeOffRequests    TimeOffRequest[]    @relation("TimeOffEmployee")
+  timeOffReviews     TimeOffRequest[]    @relation("TimeOffReviewer")
+  clockEntries       ClockEntry[]
+  availability       Availability[]
+  swapRequestsMade   ShiftSwapRequest[]  @relation("SwapRequester")
+  swapRequestsReceived ShiftSwapRequest[] @relation("SwapRecipient")
+  swapReviews        ShiftSwapRequest[]  @relation("SwapReviewer")
+  notifications      Notification[]
+
+  @@unique([email, organizationId])
+  @@index([organizationId])
+  @@map("users")
+}
+
+model Invitation {
+  id             String    @id @default(cuid())
+  email          String
+  role           Role
+  inviteCode     String    @unique
+  organizationId String
+  invitedById    String
+  acceptedAt     DateTime?
+  expiresAt      DateTime
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  invitedBy    User         @relation("InvitedBy", fields: [invitedById], references: [id])
+
+  @@index([inviteCode])
+  @@map("invitations")
+}
+
+model ManagerDelegation {
+  id          String              @id @default(cuid())
+  managerId   String
+  permission  DelegatedPermission
+  grantedById String
+  createdAt   DateTime            @default(now())
+
+  manager   User @relation("DelegatedManager", fields: [managerId], references: [id])
+  grantedBy User @relation("GrantedBy", fields: [grantedById], references: [id])
+
+  @@unique([managerId, permission])
+  @@map("manager_delegations")
+}
+
+model Shift {
+  id                String    @id @default(cuid())
+  organizationId    String
+  employeeId        String?
+  createdById       String
+  title             String?
+  startTime         DateTime
+  endTime           DateTime
+  isRecurring       Boolean   @default(false)
+  recurrenceRule    String?
+  recurrenceGroupId String?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  employee     User?        @relation("ShiftAssignedTo", fields: [employeeId], references: [id])
+  createdBy    User         @relation("ShiftCreatedBy", fields: [createdById], references: [id])
+  clockEntries ClockEntry[]
+  swapRequestsAsRequester ShiftSwapRequest[] @relation("SwapRequesterShift")
+  swapRequestsAsRecipient ShiftSwapRequest[] @relation("SwapRecipientShift")
+
+  @@index([organizationId, startTime, endTime])
+  @@index([employeeId, startTime])
+  @@map("shifts")
+}
+
+model TimeOffRequest {
+  id             String        @id @default(cuid())
+  employeeId     String
+  organizationId String
+  startDate      DateTime
+  endDate        DateTime
+  reason         String?
+  status         TimeOffStatus @default(PENDING)
+  reviewedById   String?
+  reviewedAt     DateTime?
+  reviewNote     String?
+  createdAt      DateTime      @default(now())
+
+  employee     User         @relation("TimeOffEmployee", fields: [employeeId], references: [id])
+  reviewedBy   User?        @relation("TimeOffReviewer", fields: [reviewedById], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([employeeId])
+  @@map("time_off_requests")
+}
+
+model ClockEntry {
+  id             String    @id @default(cuid())
+  employeeId     String
+  organizationId String
+  clockIn        DateTime
+  clockOut       DateTime?
+  shiftId        String?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  employee     User         @relation(fields: [employeeId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  shift        Shift?       @relation(fields: [shiftId], references: [id])
+
+  @@index([employeeId, clockIn])
+  @@map("clock_entries")
+}
+
+model Availability {
+  id         String    @id @default(cuid())
+  employeeId String
+  dayOfWeek  DayOfWeek
+  startTime  String    // "HH:mm" format
+  endTime    String    // "HH:mm" format
+  isAvailable Boolean  @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  employee User @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, dayOfWeek, startTime])
+  @@map("availability")
+}
+
+model ShiftSwapRequest {
+  id               String     @id @default(cuid())
+  requesterId      String
+  recipientId      String
+  requesterShiftId String
+  recipientShiftId String?
+  organizationId   String
+  status           SwapStatus @default(PENDING)
+  reason           String?
+  reviewedById     String?
+  reviewedAt       DateTime?
+  createdAt        DateTime   @default(now())
+
+  requester      User         @relation("SwapRequester", fields: [requesterId], references: [id])
+  recipient      User         @relation("SwapRecipient", fields: [recipientId], references: [id])
+  requesterShift Shift        @relation("SwapRequesterShift", fields: [requesterShiftId], references: [id])
+  recipientShift Shift?       @relation("SwapRecipientShift", fields: [recipientShiftId], references: [id])
+  reviewedBy     User?        @relation("SwapReviewer", fields: [reviewedById], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, status])
+  @@map("shift_swap_requests")
+}
+
+model Notification {
+  id             String           @id @default(cuid())
+  userId         String
+  organizationId String
+  type           NotificationType
+  title          String
+  message        String
+  link           String?
+  isRead         Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}

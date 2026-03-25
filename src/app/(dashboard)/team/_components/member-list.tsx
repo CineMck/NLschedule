@@ -1,8 +1,9 @@
 "use client";
 
 import { ROLE_LABELS } from "@/lib/constants";
-import { deactivateUser, reactivateUser, updateUserPayInfo } from "@/server/actions/team";
+import { deactivateUser, reactivateUser, updateUserPayInfo, updateUserRole } from "@/server/actions/team";
 import { useState } from "react";
+import type { Role } from "@prisma/client";
 
 type Member = {
   id: string;
@@ -27,6 +28,12 @@ export function MemberList({
   const [editingPay, setEditingPay] = useState<string | null>(null);
   const [payType, setPayType] = useState<"HOURLY" | "SALARY">("HOURLY");
   const [rate, setRate] = useState("");
+  const [editingRole, setEditingRole] = useState<string | null>(null);
+
+  async function handleRoleUpdate(userId: string, newRole: Role) {
+    await updateUserRole(userId, newRole);
+    setEditingRole(null);
+  }
 
   async function handlePayUpdate(userId: string) {
     await updateUserPayInfo(userId, payType, parseFloat(rate));
@@ -73,9 +80,34 @@ export function MemberList({
                   {member.email}
                 </td>
                 <td className="px-4 py-3">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700">
-                    {ROLE_LABELS[member.role]}
-                  </span>
+                  {userRole === "OWNER" && member.id !== currentUserId && editingRole === member.id ? (
+                    <select
+                      value={member.role}
+                      onChange={(e) => handleRoleUpdate(member.id, e.target.value as Role)}
+                      onBlur={() => setEditingRole(null)}
+                      autoFocus
+                      className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    >
+                      <option value="OWNER">Owner</option>
+                      <option value="MANAGER">Manager</option>
+                      <option value="EMPLOYEE">Employee</option>
+                    </select>
+                  ) : (
+                    <span
+                      onClick={() => {
+                        if (userRole === "OWNER" && member.id !== currentUserId) {
+                          setEditingRole(member.id);
+                        }
+                      }}
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700 ${
+                        userRole === "OWNER" && member.id !== currentUserId
+                          ? "cursor-pointer hover:bg-primary-100"
+                          : ""
+                      }`}
+                    >
+                      {ROLE_LABELS[member.role]}
+                    </span>
+                  )}
                 </td>
                 {userRole === "OWNER" && (
                   <td className="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">

@@ -4,6 +4,7 @@ import { auth } from "@/server/auth";
 import { db } from "@/server/db";
 import { nanoid } from "nanoid";
 import { canInviteEmployees } from "@/lib/permissions";
+import { sendInviteEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/types";
 import type { Role, PayType } from "@prisma/client";
@@ -18,10 +19,15 @@ async function getUserDelegations(userId: string) {
 
 export async function inviteUser(
   email: string,
-  role: "MANAGER" | "EMPLOYEE"
+  role: "OWNER" | "MANAGER" | "EMPLOYEE"
 ): Promise<ActionResult<{ inviteCode: string }>> {
   const session = await auth();
   if (!session?.user) return { success: false, error: "Unauthorized" };
+
+  // Only owners can invite other owners or managers
+  if ((role === "OWNER" || role === "MANAGER") && session.user.role !== "OWNER") {
+    return { success: false, error: "Only owners can invite owners and managers" };
+  }
 
   const delegations = await getUserDelegations(session.user.id);
 
@@ -33,7 +39,7 @@ export async function inviteUser(
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7);
 
-  await db.invitation.create({
+  const invitation = await db.invitation.create({
     data: {
       email,
       role,
@@ -43,6 +49,25 @@ export async function inviteUser(
       expiresAt,
     },
   });
+
+  // Send invite email
+  try {
+    const organization = await db.organization.findUnique({
+      where: { id: session.user.organizationId },
+      select: { name: true },
+    });
+
+    await sendInviteEmail({
+      to: email,
+      inviteCode,
+      role,
+      organizationName: organization?.name || "your organization",
+      inviterName: session.user.name || "A team member",
+    });
+  } catch (emailError) {
+    // Email sending failed but invitation was still created
+    console.error("Failed to send invite email:", emailError);
+  }
 
   revalidatePath("/team");
   return { success: true, data: { inviteCode } };

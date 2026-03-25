@@ -2,13 +2,13 @@
 
 import { inviteUser } from "@/server/actions/team";
 import { useState } from "react";
-import { UserPlus, X } from "lucide-react";
+import { UserPlus, X, Mail } from "lucide-react";
 import type { Role } from "@prisma/client";
 
 export function InviteDialog({ userRole }: { userRole: Role }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"MANAGER" | "EMPLOYEE">("EMPLOYEE");
+  const [role, setRole] = useState<"OWNER" | "MANAGER" | "EMPLOYEE">("EMPLOYEE");
   const [result, setResult] = useState<{ code?: string; error?: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -64,10 +64,16 @@ export function InviteDialog({ userRole }: { userRole: Role }) {
                   <p className="text-sm text-green-800 font-medium">
                     Invitation created!
                   </p>
-                  <p className="text-sm text-green-700 mt-1">
-                    Share this invite code:
+                  <div className="flex items-center gap-2 mt-1">
+                    <Mail className="w-4 h-4 text-green-600" />
+                    <p className="text-sm text-green-700">
+                      An invite email has been sent.
+                    </p>
+                  </div>
+                  <p className="text-sm text-green-700 mt-2">
+                    Invite code:
                   </p>
-                  <p className="text-lg font-mono font-bold text-green-900 mt-2">
+                  <p className="text-lg font-mono font-bold text-green-900 mt-1">
                     {result.code}
                   </p>
                   <p className="text-xs text-green-600 mt-2">
@@ -115,13 +121,16 @@ export function InviteDialog({ userRole }: { userRole: Role }) {
                   <select
                     value={role}
                     onChange={(e) =>
-                      setRole(e.target.value as "MANAGER" | "EMPLOYEE")
+                      setRole(e.target.value as "OWNER" | "MANAGER" | "EMPLOYEE")
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="EMPLOYEE">Employee</option>
                     {userRole === "OWNER" && (
-                      <option value="MANAGER">Manager</option>
+                      <>
+                        <option value="MANAGER">Manager</option>
+                        <option value="OWNER">Owner</option>
+                      </>
                     )}
                   </select>
                 </div>
@@ -131,7 +140,7 @@ export function InviteDialog({ userRole }: { userRole: Role }) {
                   disabled={loading}
                   className="w-full py-2.5 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors"
                 >
-                  {loading ? "Creating..." : "Create Invitation"}
+                  {loading ? "Creating..." : "Create & Send Invitation"}
                 </button>
               </form>
             )}

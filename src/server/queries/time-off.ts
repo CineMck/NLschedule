@@ -20,6 +20,27 @@ export async function getPendingTimeOffRequests(organizationId: string) {
   });
 }
 
+export async function getApprovedTimeOffForWeek(
+  organizationId: string,
+  weekStart: Date
+) {
+  const { startOfWeek, endOfWeek } = await import("date-fns");
+  const start = startOfWeek(weekStart, { weekStartsOn: 0 });
+  const end = endOfWeek(weekStart, { weekStartsOn: 0 });
+
+  return db.timeOffRequest.findMany({
+    where: {
+      organizationId,
+      status: "APPROVED",
+      startDate: { lte: end },
+      endDate: { gte: start },
+    },
+    include: {
+      employee: { select: { id: true, name: true } },
+    },
+  });
+}
+
 export async function getAllTimeOffRequests(organizationId: string) {
   return db.timeOffRequest.findMany({
     where: { organizationId },

@@ -72,6 +72,7 @@ model Organization {
   clockEntries       ClockEntry[]
   shiftSwapRequests  ShiftSwapRequest[]
   notifications      Notification[]
+  scheduleTemplates  ScheduleTemplate[]
 
   @@map("organizations")
 }
@@ -110,6 +111,8 @@ model User {
   swapRequestsReceived ShiftSwapRequest[] @relation("SwapRecipient")
   swapReviews        ShiftSwapRequest[]  @relation("SwapReviewer")
   notifications      Notification[]
+  createdTemplates   ScheduleTemplate[]     @relation("TemplateCreatedBy")
+  templateShifts     ScheduleTemplateShift[] @relation("TemplateShiftEmployee")
 
   @@unique([email, organizationId])
   @@index([organizationId])
@@ -272,4 +275,35 @@ model Notification {
 
   @@index([userId, isRead, createdAt])
   @@map("notifications")
+}
+
+model ScheduleTemplate {
+  id             String   @id @default(cuid())
+  name           String
+  organizationId String
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  organization Organization          @relation(fields: [organizationId], references: [id])
+  createdBy    User                  @relation("TemplateCreatedBy", fields: [createdById], references: [id])
+  shifts       ScheduleTemplateShift[]
+
+  @@index([organizationId])
+  @@map("schedule_templates")
+}
+
+model ScheduleTemplateShift {
+  id         String  @id @default(cuid())
+  templateId String
+  employeeId String?
+  dayOfWeek  Int     // 0=Sunday, 6=Saturday
+  startTime  String  // "HH:mm"
+  endTime    String  // "HH:mm"
+  title      String?
+  notes      String?
+
+  template ScheduleTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  employee User?            @relation("TemplateShiftEmployee", fields: [employeeId], references: [id])
+
+  @@map("schedule_template_shifts")
 }

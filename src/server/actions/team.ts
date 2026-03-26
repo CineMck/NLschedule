@@ -167,6 +167,54 @@ export async function deleteUser(userId: string): Promise<ActionResult> {
   return { success: true };
 }
 
+export async function deleteInvitation(invitationId: string): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user || session.user.role !== "OWNER") {
+    return { success: false, error: "Only owners can delete invitations" };
+  }
+
+  await db.invitation.delete({
+    where: { id: invitationId, organizationId: session.user.organizationId },
+  });
+
+  revalidatePath("/team");
+  return { success: true };
+}
+
+export async function resendInvitation(invitationId: string): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user || session.user.role !== "OWNER") {
+    return { success: false, error: "Only owners can resend invitations" };
+  }
+
+  const invitation = await db.invitation.findFirst({
+    where: { id: invitationId, organizationId: session.user.organizationId },
+  });
+
+  if (!invitation) return { success: false, error: "Invitation not found" };
+  if (invitation.acceptedAt) return { success: false, error: "Invitation already accepted" };
+
+  try {
+    const organization = await db.organization.findUnique({
+      where: { id: session.user.organizationId },
+      select: { name: true },
+    });
+
+    await sendInviteEmail({
+      to: invitation.email,
+      inviteCode: invitation.inviteCode,
+      role: invitation.role,
+      organizationName: organization?.name || "your organization",
+      inviterName: session.user.name || "A team member",
+    });
+  } catch (emailError) {
+    console.error("Failed to resend invite email:", emailError);
+    return { success: false, error: "Failed to send email" };
+  }
+
+  return { success: true };
+}
+
 export async function updateUserRole(
   userId: string,
   role: Role

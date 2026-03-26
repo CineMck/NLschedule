@@ -5,7 +5,7 @@ import { db } from "@/server/db";
 import { canManageSchedule } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/types";
-import { addWeeks } from "date-fns";
+import { addWeeks, startOfWeek, endOfWeek, addDays, format, getDay } from "date-fns";
 
 export async function createShift(data: {
   employeeId?: string;
@@ -150,5 +150,155 @@ export async function deleteShift(
   }
 
   revalidatePath("/schedule");
+  return { success: true };
+}
+
+export async function copyLastWeekSchedule(
+  weekStartStr: string
+): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user) return { success: false, error: "Unauthorized" };
+  if (!canManageSchedule(session.user.role)) {
+    return { success: false, error: "You don't have permission to manage schedules" };
+  }
+
+  const targetWeekStart = startOfWeek(new Date(weekStartStr), { weekStartsOn: 0 });
+  const prevWeekStart = addDays(targetWeekStart, -7);
+  const prevWeekEnd = endOfWeek(prevWeekStart, { weekStartsOn: 0 });
+
+  const prevShifts = await db.shift.findMany({
+    where: {
+      organizationId: session.user.organizationId,
+      startTime: { gte: prevWeekStart },
+      endTime: { lte: addDays(prevWeekEnd, 1) },
+    },
+  });
+
+  if (prevShifts.length === 0) {
+    return { success: false, error: "No shifts found in the previous week" };
+  }
+
+  const newShifts = prevShifts.map((shift) => ({
+    organizationId: session.user.organizationId,
+    employeeId: shift.employeeId,
+    createdById: session.user.id,
+    title: shift.title,
+    startTime: addDays(shift.startTime, 7),
+    endTime: addDays(shift.endTime, 7),
+    notes: shift.notes,
+  }));
+
+  await db.shift.createMany({ data: newShifts });
+
+  revalidatePath("/schedule");
+  return { success: true };
+}
+
+export async function saveAsTemplate(
+  weekStartStr: string,
+  name: string
+): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user) return { success: false, error: "Unauthorized" };
+  if (!canManageSchedule(session.user.role)) {
+    return { success: false, error: "You don't have permission to manage schedules" };
+  }
+
+  const weekStart = startOfWeek(new Date(weekStartStr), { weekStartsOn: 0 });
+  const weekEnd = endOfWeek(weekStart, { weekStartsOn: 0 });
+
+  const shifts = await db.shift.findMany({
+    where: {
+      organizationId: session.user.organizationId,
+      startTime: { gte: weekStart },
+      endTime: { lte: addDays(weekEnd, 1) },
+    },
+  });
+
+  if (shifts.length === 0) {
+    return { success: false, error: "No shifts found in this week to save" };
+  }
+
+  await db.scheduleTemplate.create({
+    data: {
+      name,
+      organizationId: session.user.organizationId,
+      createdById: session.user.id,
+      shifts: {
+        create: shifts.map((shift) => ({
+          employeeId: shift.employeeId,
+          dayOfWeek: getDay(shift.startTime),
+          startTime: format(shift.startTime, "HH:mm"),
+          endTime: format(shift.endTime, "HH:mm"),
+          title: shift.title,
+          notes: shift.notes,
+        })),
+      },
+    },
+  });
+
+  return { success: true };
+}
+
+export async function applyTemplate(
+  templateId: string,
+  weekStartStr: string
+): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user) return { success: false, error: "Unauthorized" };
+  if (!canManageSchedule(session.user.role)) {
+    return { success: false, error: "You don't have permission to manage schedules" };
+  }
+
+  const template = await db.scheduleTemplate.findFirst({
+    where: { id: templateId, organizationId: session.user.organizationId },
+    include: { shifts: true },
+  });
+
+  if (!template) return { success: false, error: "Template not found" };
+
+  const weekStart = startOfWeek(new Date(weekStartStr), { weekStartsOn: 0 });
+
+  const newShifts = template.shifts.map((ts) => {
+    const day = addDays(weekStart, ts.dayOfWeek);
+    const [startH, startM] = ts.startTime.split(":").map(Number);
+    const [endH, endM] = ts.endTime.split(":").map(Number);
+
+    const shiftStart = new Date(day);
+    shiftStart.setHours(startH, startM, 0, 0);
+
+    const shiftEnd = new Date(day);
+    shiftEnd.setHours(endH, endM, 0, 0);
+
+    return {
+      organizationId: session.user.organizationId,
+      employeeId: ts.employeeId,
+      createdById: session.user.id,
+      title: ts.title,
+      startTime: shiftStart,
+      endTime: shiftEnd,
+      notes: ts.notes,
+    };
+  });
+
+  await db.shift.createMany({ data: newShifts });
+
+  revalidatePath("/schedule");
+  return { success: true };
+}
+
+export async function deleteTemplate(
+  templateId: string
+): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user) return { success: false, error: "Unauthorized" };
+  if (!canManageSchedule(session.user.role)) {
+    return { success: false, error: "You don't have permission to manage schedules" };
+  }
+
+  await db.scheduleTemplate.delete({
+    where: { id: templateId, organizationId: session.user.organizationId },
+  });
+
   return { success: true };
 }

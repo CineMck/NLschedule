@@ -1,6 +1,17 @@
 import { db } from "@/server/db";
 import { startOfWeek, endOfWeek, addDays } from "date-fns";
 
+export async function getTemplates(organizationId: string) {
+  return db.scheduleTemplate.findMany({
+    where: { organizationId },
+    include: {
+      createdBy: { select: { name: true } },
+      _count: { select: { shifts: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
 export async function getWeekShifts(
   organizationId: string,
   weekStart: Date

@@ -2,9 +2,11 @@
 
 import { useWeekNavigation } from "@/hooks/use-week-navigation";
 import { addDays, format, isSameDay } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Copy, LayoutTemplate } from "lucide-react";
 import { ShiftCard } from "./shift-card";
 import { ShiftFormDialog } from "./shift-form-dialog";
+import { TemplateDialog } from "./template-dialog";
+import { copyLastWeekSchedule } from "@/server/actions/shifts";
 import { useState } from "react";
 
 type Shift = {
@@ -25,22 +27,43 @@ type Employee = {
   role: string;
 };
 
+type TimeOffRequest = {
+  id: string;
+  startDate: string;
+  endDate: string;
+  employee: { id: string; name: string };
+};
+
+type Template = {
+  id: string;
+  name: string;
+  createdAt: string;
+  createdBy: { name: string };
+  _count: { shifts: number };
+};
+
 export function WeekView({
   shifts,
   employees,
   canManage,
   currentUserId,
+  timeOffRequests = [],
+  templates = [],
 }: {
   shifts: Shift[];
   employees: Employee[];
   canManage: boolean;
   currentUserId: string;
+  timeOffRequests?: TimeOffRequest[];
+  templates?: Template[];
 }) {
   const { weekStart, goToPreviousWeek, goToNextWeek, goToToday } =
     useWeekNavigation();
   const [showForm, setShowForm] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
+  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+  const [copying, setCopying] = useState(false);
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const today = new Date();
@@ -49,6 +72,15 @@ export function WeekView({
     return shifts.filter((shift) => {
       const shiftDate = new Date(shift.startTime);
       return isSameDay(shiftDate, day);
+    });
+  }
+
+  function getTimeOffForDay(day: Date) {
+    return timeOffRequests.filter((req) => {
+      const start = new Date(req.startDate);
+      const end = new Date(req.endDate);
+      return day >= new Date(start.getFullYear(), start.getMonth(), start.getDate()) &&
+             day <= new Date(end.getFullYear(), end.getMonth(), end.getDate());
     });
   }
 
@@ -99,17 +131,38 @@ export function WeekView({
         </div>
 
         {canManage && (
-          <button
-            onClick={() => {
-              setEditingShift(null);
-              setSelectedDate(null);
-              setShowForm(true);
-            }}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Add Shift
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                setCopying(true);
+                await copyLastWeekSchedule(format(weekStart, "yyyy-MM-dd"));
+                setCopying(false);
+              }}
+              disabled={copying}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors disabled:opacity-50"
+            >
+              <Copy className="w-4 h-4" />
+              {copying ? "Copying..." : "Copy Last Week"}
+            </button>
+            <button
+              onClick={() => setShowTemplateDialog(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+            >
+              <LayoutTemplate className="w-4 h-4" />
+              Templates
+            </button>
+            <button
+              onClick={() => {
+                setEditingShift(null);
+                setSelectedDate(null);
+                setShowForm(true);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Add Shift
+            </button>
+          </div>
         )}
       </div>
 
@@ -146,6 +199,15 @@ export function WeekView({
               </div>
 
               <div className="p-2 space-y-1.5">
+                {getTimeOffForDay(day).map((req) => (
+                  <div
+                    key={`to-${req.id}`}
+                    className="px-2 py-1.5 rounded border bg-red-50 border-red-200 text-red-700"
+                  >
+                    <p className="text-xs font-medium">{req.employee.name}</p>
+                    <p className="text-[10px]">Time Off</p>
+                  </div>
+                ))}
                 {dayShifts.map((shift) => (
                   <ShiftCard
                     key={shift.id}
@@ -193,6 +255,14 @@ export function WeekView({
             setEditingShift(null);
             setSelectedDate(null);
           }}
+        />
+      )}
+
+      {showTemplateDialog && (
+        <TemplateDialog
+          templates={templates}
+          weekStartISO={format(weekStart, "yyyy-MM-dd")}
+          onClose={() => setShowTemplateDialog(false)}
         />
       )}
     </div>

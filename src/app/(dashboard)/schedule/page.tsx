@@ -1,7 +1,8 @@
 import { auth } from "@/server/auth";
 import { redirect } from "next/navigation";
-import { getWeekShifts, getEmployeeWeekShifts } from "@/server/queries/shifts";
+import { getWeekShifts, getEmployeeWeekShifts, getTemplates } from "@/server/queries/shifts";
 import { getActiveEmployees } from "@/server/queries/users";
+import { getApprovedTimeOffForWeek } from "@/server/queries/time-off";
 import { startOfWeek, parseISO } from "date-fns";
 import { WeekView } from "./_components/week-view";
 import { canManageSchedule } from "@/lib/permissions";
@@ -25,9 +26,15 @@ export default async function SchedulePage({
     ? await getWeekShifts(session.user.organizationId, weekStart)
     : await getEmployeeWeekShifts(session.user.id, weekStart);
 
-  const employees = isManager
-    ? await getActiveEmployees(session.user.organizationId)
-    : [];
+  const [employees, timeOffRequests, templates] = await Promise.all([
+    isManager
+      ? getActiveEmployees(session.user.organizationId)
+      : Promise.resolve([]),
+    getApprovedTimeOffForWeek(session.user.organizationId, weekStart),
+    isManager
+      ? getTemplates(session.user.organizationId)
+      : Promise.resolve([]),
+  ]);
 
   return (
     <div className="space-y-4">
@@ -37,6 +44,8 @@ export default async function SchedulePage({
         employees={employees}
         canManage={isManager}
         currentUserId={session.user.id}
+        timeOffRequests={JSON.parse(JSON.stringify(timeOffRequests))}
+        templates={JSON.parse(JSON.stringify(templates))}
       />
     </div>
   );

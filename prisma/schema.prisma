@@ -81,6 +81,12 @@ model User {
   email          String
   passwordHash   String
   name           String
+  birthday       DateTime?
+  phone          String?
+  addressStreet  String?
+  addressCity    String?
+  addressState   String?
+  addressZip     String?
   role           Role
   payType        PayType?
   hourlyRate     Decimal?  @db.Decimal(10, 2)

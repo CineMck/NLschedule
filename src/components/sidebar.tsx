@@ -11,6 +11,7 @@ import {
   DollarSign,
   Bell,
   CalendarClock,
+  UserCircle,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,7 @@ const navItems: NavItem[] = [
   { label: "Team", href: "/team", icon: Users, roles: ["OWNER", "MANAGER"] },
   { label: "Payroll", href: "/payroll", icon: DollarSign, roles: ["OWNER"] },
   { label: "Notifications", href: "/notifications", icon: Bell },
+  { label: "Profile", href: "/profile", icon: UserCircle },
 ];
 
 export function Sidebar({

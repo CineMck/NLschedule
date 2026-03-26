@@ -1,17 +1,6 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "smtp.gmail.com",
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: process.env.SMTP_SECURE === "true",
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-  connectionTimeout: 5000,
-  greetingTimeout: 5000,
-  socketTimeout: 10000,
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function sendInviteEmail({
   to,
@@ -29,8 +18,8 @@ export async function sendInviteEmail({
   const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
   const signupUrl = `${baseUrl}/signup?code=${inviteCode}`;
 
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+  await resend.emails.send({
+    from: process.env.EMAIL_FROM || "NLschedule <onboarding@resend.dev>",
     to,
     subject: `You're invited to join ${organizationName} on NLschedule`,
     html: `

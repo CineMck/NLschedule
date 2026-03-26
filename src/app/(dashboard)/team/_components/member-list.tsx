@@ -1,7 +1,7 @@
 "use client";
 
 import { ROLE_LABELS } from "@/lib/constants";
-import { deactivateUser, reactivateUser, updateUserPayInfo, updateUserRole } from "@/server/actions/team";
+import { deactivateUser, reactivateUser, updateUserPayInfo, updateUserRole, deleteUser } from "@/server/actions/team";
 import { useState } from "react";
 import type { Role } from "@prisma/client";
 
@@ -185,22 +185,34 @@ export function MemberList({
                 {userRole === "OWNER" && (
                   <td className="px-4 py-3 text-right">
                     {member.id !== currentUserId && (
-                      <button
-                        onClick={async () => {
-                          if (member.isActive) {
-                            await deactivateUser(member.id);
-                          } else {
-                            await reactivateUser(member.id);
-                          }
-                        }}
-                        className={`text-xs px-2 py-1 rounded ${
-                          member.isActive
-                            ? "text-red-600 hover:bg-red-50"
-                            : "text-green-600 hover:bg-green-50"
-                        }`}
-                      >
-                        {member.isActive ? "Deactivate" : "Reactivate"}
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={async () => {
+                            if (member.isActive) {
+                              await deactivateUser(member.id);
+                            } else {
+                              await reactivateUser(member.id);
+                            }
+                          }}
+                          className={`text-xs px-2 py-1 rounded ${
+                            member.isActive
+                              ? "text-red-600 hover:bg-red-50"
+                              : "text-green-600 hover:bg-green-50"
+                          }`}
+                        >
+                          {member.isActive ? "Deactivate" : "Reactivate"}
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (confirm(`Are you sure you want to permanently delete ${member.name}? This cannot be undone.`)) {
+                              await deleteUser(member.id);
+                            }
+                          }}
+                          className="text-xs px-2 py-1 rounded text-red-600 hover:bg-red-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     )}
                   </td>
                 )}

@@ -130,6 +130,43 @@ export async function updateUserPayInfo(
   return { success: true };
 }
 
+export async function deleteUser(userId: string): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user || session.user.role !== "OWNER") {
+    return { success: false, error: "Only owners can delete users" };
+  }
+
+  if (userId === session.user.id) {
+    return { success: false, error: "You cannot delete yourself" };
+  }
+
+  // Delete all related records in a transaction
+  await db.$transaction(async (tx) => {
+    await tx.notification.deleteMany({ where: { userId } });
+    await tx.availability.deleteMany({ where: { employeeId: userId } });
+    await tx.clockEntry.deleteMany({ where: { employeeId: userId } });
+    await tx.shiftSwapRequest.deleteMany({
+      where: { OR: [{ requesterId: userId }, { recipientId: userId }, { reviewedById: userId }] },
+    });
+    await tx.timeOffRequest.deleteMany({
+      where: { OR: [{ employeeId: userId }, { reviewedById: userId }] },
+    });
+    await tx.shift.updateMany({
+      where: { employeeId: userId },
+      data: { employeeId: null },
+    });
+    await tx.shift.deleteMany({ where: { createdById: userId } });
+    await tx.managerDelegation.deleteMany({
+      where: { OR: [{ managerId: userId }, { grantedById: userId }] },
+    });
+    await tx.invitation.deleteMany({ where: { invitedById: userId } });
+    await tx.user.delete({ where: { id: userId, organizationId: session.user.organizationId } });
+  });
+
+  revalidatePath("/team");
+  return { success: true };
+}
+
 export async function updateUserRole(
   userId: string,
   role: Role
